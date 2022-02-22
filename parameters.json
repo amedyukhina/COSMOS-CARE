@@ -1,0 +1,45 @@
+{
+    "base_dir": "/research/sharedresources/cbi/data_exchange/hangrp/Development/Restoration/Measured/Analysis_test",
+    "parameter_fn": "/research/sharedresources/cbi/common/Anna/codes/COSMOS-CARE/parameters.json",
+    "input_dir": "ROI",
+    "data_dir": "CARE_data",
+    "model_dir": "CARE_models",
+    "accuracy_dir": "accuracy",
+    "accuracy_fn": "accuracy.csv",
+    "n_jobs": 30,
+    "name_high": "high",
+    "name_low": "low",
+    "axes": "ZYX",
+    "input_pairs": [
+        [
+            "high/deconvolved",
+            "low/raw"
+        ],
+        [
+            "high/deconvolved",
+            "low/deconvolved"
+        ]
+    ],
+    "patch_size": [
+        [
+            8,
+            8,
+            8
+        ],
+        [
+            16,
+            16,
+            16
+        ]
+    ],
+    "n_patches_per_image": [
+        50
+    ],
+    "train_epochs": 10,
+    "train_steps_per_epoch": [
+        10
+    ],
+    "train_batch_size": [
+        8
+    ]
+}
