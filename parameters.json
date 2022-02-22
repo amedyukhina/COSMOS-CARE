@@ -1,6 +1,8 @@
 {
-    "base_dir": "/research/sharedresources/cbi/data_exchange/hangrp/Development/Restoration/Measured/Analysis_test",
     "parameter_fn": "/research/sharedresources/cbi/common/Anna/codes/COSMOS-CARE/parameters.json",
+    "db_filename": "/research/sharedresources/cbi/data_exchange/hangrp/Development/Restoration/Measured/Analysis_test/cosmos.sqlite",
+    "workflow_name": "CARE_test",
+    "base_dir": "/research/sharedresources/cbi/data_exchange/hangrp/Development/Restoration/Measured/Analysis_test",
     "input_dir": "ROI",
     "data_dir": "CARE_data",
     "model_dir": "CARE_models",
