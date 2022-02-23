@@ -97,8 +97,26 @@ def get_restore_tasks(workflow, care_prep_tasks, train_tasks, params):
     return restore_tasks
 
 
-def get_evaluation_tasks(workflow, restore_tasks, params):
+def get_evaluation_tasks(workflow, restore_tasks, care_prep_tasks, params):
+
     evaluation_tasks = []
+
+    for care_prep_task in care_prep_tasks:
+        for inpdir in [params.name_high, params.name_low]:
+            input_dir = os.path.join(care_prep_task.params['output_dir'], inpdir)
+            uid = care_prep_task.params['output_dir'].split('/')[-1] + '_' + inpdir
+            task = workflow.add_task(
+                func=evaluate,
+                params=dict(input_dir=input_dir,
+                            gt_dir=os.path.join(input_dir, rf'../{params.name_high}'),
+                            output_fn=os.path.join(params.base_dir, params.accuracy_dir, uid + '.csv'),
+                            model_name=inpdir,
+                            pair_name=input_dir.split('/')[-2]),
+                uid=uid,
+                parents=[care_prep_task]
+            )
+            evaluation_tasks.append(task)
+
     for restore_task in restore_tasks:
         input_dir = restore_task.params['output_dir']
         uid = input_dir.split('/')[-2] + '_' + input_dir.split('/')[-1]
@@ -113,6 +131,7 @@ def get_evaluation_tasks(workflow, restore_tasks, params):
             parents=[restore_task]
         )
         evaluation_tasks.append(task)
+
     return evaluation_tasks
 
 
@@ -132,7 +151,7 @@ def recipe(workflow, params):
     datagen_tasks = set_datagen_tasks(workflow, care_prep_tasks, params)
     train_tasks = get_train_tasks(workflow, datagen_tasks, params)
     restore_tasks = get_restore_tasks(workflow, care_prep_tasks, train_tasks, params)
-    evaluation_tasks = get_evaluation_tasks(workflow, restore_tasks, params)
+    evaluation_tasks = get_evaluation_tasks(workflow, restore_tasks, care_prep_tasks, params)
     get_summarize_task(workflow, evaluation_tasks, params)
 
 
