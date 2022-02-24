@@ -25,6 +25,8 @@
             "low/deconvolved"
         ]
     ],
+    "test_fraction": 0.2,
+    "validation_fraction": 0.2,
     "patch_size": [
         [
             8,
