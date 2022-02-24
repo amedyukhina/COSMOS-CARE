@@ -25,7 +25,12 @@ def set_care_prep_tasks(workflow, params):
                                     for fn in input_pair],
                         output_dir=os.path.join(params.base_dir, params.data_dir, uid),
                         name_high=params.name_high,
-                        name_low=params.name_low),
+                        name_low=params.name_low,
+                        name_train=params.name_train,
+                        name_validation=params.name_validation,
+                        name_test=params.name_test,
+                        validation_fraction=params.validation_fraction,
+                        test_fraction=params.test_fraction),
             uid=uid)
         care_prep_tasks.append(task)
     return care_prep_tasks
@@ -37,9 +42,13 @@ def set_datagen_tasks(workflow, care_prep_tasks, params):
         pair_dir = care_prep_task.params['output_dir']
         for ps, n_patches in product(params.patch_size, params.n_patches_per_image):
             uid = rf"{pair_dir.split('/')[-1]}_patch_size={ps}_npatches={n_patches}"
+            if params.validation_fraction > 0 or params.test_fraction > 0:
+                basepath = os.path.join(pair_dir, params.name_train)
+            else:
+                basepath = pair_dir
             task = workflow.add_task(
                 func=datagen,
-                params=dict(basepath=pair_dir,
+                params=dict(basepath=basepath,
                             save_file=os.path.join(params.base_dir, params.data_dir, rf"{uid}.npz"),
                             target_dir=params.name_high,
                             source_dir=params.name_low,
@@ -81,6 +90,11 @@ def get_restore_tasks(workflow, care_prep_tasks, train_tasks, params):
             input_dir = care_prep_task.params['output_dir']
             model_name = train_task.params['model_name']
             uid = rf"{input_dir.split('/')[-1]}_{model_name}"
+            if params.validation_fraction > 0 or params.test_fraction > 0:
+                if params.validation_fraction > 0:
+                    input_dir = os.path.join(input_dir, params.name_validation)
+                else:
+                    input_dir = os.path.join(input_dir, params.name_train)
             output_dir = os.path.join(input_dir, rf"{params.name_low}_restored_{model_name}")
             task = workflow.add_task(
                 func=restore,
@@ -103,8 +117,16 @@ def get_evaluation_tasks(workflow, restore_tasks, care_prep_tasks, params):
 
     for care_prep_task in care_prep_tasks:
         for inpdir in [params.name_high, params.name_low]:
-            input_dir = os.path.join(care_prep_task.params['output_dir'], inpdir)
-            uid = care_prep_task.params['output_dir'].split('/')[-1] + '_' + inpdir
+            input_dir = care_prep_task.params['output_dir']
+            uid = input_dir.split('/')[-1] + '_' + inpdir
+
+            if params.validation_fraction > 0 or params.test_fraction > 0:
+                if params.validation_fraction > 0:
+                    input_dir = os.path.join(input_dir, params.name_validation)
+                else:
+                    input_dir = os.path.join(input_dir, params.name_train)
+
+            input_dir = os.path.join(input_dir, inpdir)
             task = workflow.add_task(
                 func=evaluate,
                 params=dict(input_dir=input_dir,
@@ -119,14 +141,18 @@ def get_evaluation_tasks(workflow, restore_tasks, care_prep_tasks, params):
 
     for restore_task in restore_tasks:
         input_dir = restore_task.params['output_dir']
-        uid = input_dir.split('/')[-2] + '_' + input_dir.split('/')[-1]
+        if params.validation_fraction > 0 or params.test_fraction > 0:
+            pair_name = input_dir.split('/')[-3]
+        else:
+            pair_name = input_dir.split('/')[-2]
+        uid = pair_name + '_' + input_dir.split('/')[-1]
         task = workflow.add_task(
             func=evaluate,
             params=dict(input_dir=input_dir,
                         gt_dir=os.path.join(input_dir, rf'../{params.name_high}'),
                         output_fn=os.path.join(params.base_dir, params.accuracy_dir, uid + '.csv'),
                         model_name=restore_task.params['model_name'],
-                        pair_name=input_dir.split('/')[-2]),
+                        pair_name=pair_name),
             uid=uid,
             parents=[restore_task]
         )
