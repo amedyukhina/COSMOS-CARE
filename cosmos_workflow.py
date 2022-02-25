@@ -200,6 +200,7 @@ def main():
     recipe(workflow, params)
 
     workflow.make_output_dirs()
+    os.makedirs(params.base_dir, exist_ok=True)
     workflow.run(max_cores=params.n_jobs, cmd_wrapper=py_call, max_gpus=2)
 
     
