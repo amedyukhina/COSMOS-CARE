@@ -187,6 +187,8 @@ def main():
     p.add_argument("-drm", default="local", help="", choices=("local", "awsbatch", "slurm", "drmaa:ge", "ge"))
     p.add_argument("-q", "--queue", help="Submit to this queue if the DRM supports it")
     p.add_argument("-p", "--parameter-file", help="Parameter file name")
+    p.add_argument("-g", "--n-gpus", type=int, default=2, help="Number of GPUs to use")
+    p.add_argument("-c", "--n-cores", type=int, default=30, help="Number of CPU cores to use")
 
     args = p.parse_args()
     with open(args.parameter_file) as f:
@@ -201,7 +203,7 @@ def main():
 
     workflow.make_output_dirs()
     os.makedirs(params.base_dir, exist_ok=True)
-    workflow.run(max_cores=params.n_jobs, cmd_wrapper=py_call, max_gpus=2)
+    workflow.run(max_cores=args.n_cores, cmd_wrapper=py_call, max_gpus=args.n_gpus)
 
     
 if __name__ == "__main__":
