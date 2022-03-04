@@ -74,6 +74,7 @@ def get_train_tasks(workflow, datagen_tasks, params):
                             model_basedir=os.path.join(params.base_dir, params.model_dir),
                             train_steps_per_epoch=st,
                             train_batch_size=bs,
+                            save_history=params.save_training_history,
                             model_name=uid),
                 parents=[datagen_task],
                 uid=uid,
