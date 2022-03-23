@@ -23,17 +23,12 @@ def __copy_data(input_dir, output_dir):
             os.makedirs(os.path.dirname(fn_out), exist_ok=True)
             os.symlink(fn, fn_out)
 
-            
-def __get_subfolder(path):
-    return path.rstrip('/').split('/')[-1]
-
 
 def set_datagen_tasks(workflow, params):
     datagen_tasks = []
     for ps, n_patches in product(params.patch_size, params.n_patches_per_image):
         uid = rf"patch_size={ps}_npatches={n_patches}"
-        basepath = os.path.abspath(os.path.join(params.output_dir,
-                                                __get_subfolder(params.input_dir), params.name_train))
+        basepath = os.path.abspath(os.path.join(params.output_dir, params.data_dir, params.name_train))
         task = workflow.add_task(
             func=datagen,
             params=dict(basepath=basepath,
@@ -73,7 +68,7 @@ def get_train_tasks(workflow, datagen_tasks, params):
 
 def get_restore_tasks(workflow, train_tasks, params):
     restore_tasks = []
-    input_dir = os.path.abspath(os.path.join(params.output_dir, __get_subfolder(params.input_dir), 
+    input_dir = os.path.abspath(os.path.join(params.output_dir, params.data_dir, 
                                              params.name_validation, params.name_low))
     for train_task in train_tasks:
         model_name = train_task.params['model_name']
@@ -115,7 +110,7 @@ def get_evaluation_tasks(workflow, restore_tasks, params):
         evaluation_tasks.append(task)
         
     
-    base_dir = os.path.abspath(os.path.join(params.output_dir, __get_subfolder(params.input_dir), 
+    base_dir = os.path.abspath(os.path.join(params.output_dir, params.data_dir, 
                                             params.name_validation))
     for inpdir in os.listdir(base_dir):
         if not inpdir in ids:
@@ -169,7 +164,7 @@ def main():
     params = argparse.Namespace(**params)
     
     __copy_data(params.input_dir,
-                os.path.join(params.output_dir, __get_subfolder(params.input_dir)))
+                os.path.join(params.output_dir, params.data_dir))
 
     cosmos = Cosmos(params.db_filename, default_drm=args.drm, default_max_attempts=2, default_queue=args.queue)
     cosmos.initdb()
@@ -178,7 +173,7 @@ def main():
     recipe(workflow, params)
 
     workflow.make_output_dirs()
-    os.makedirs(params.base_dir, exist_ok=True)
+    os.makedirs(params.output_dir, exist_ok=True)
     workflow.run(max_cores=args.n_cores, cmd_wrapper=py_call, max_gpus=args.n_gpus)
     
 if __name__ == "__main__":

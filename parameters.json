@@ -4,6 +4,7 @@
     "workflow_name": "CARE_test",
     "input_dir": "path/to/the/directory/with/data",
     "output_dir": "path/to/the/directory/to/save/results/CARE_test",
+    "data_dir": "CARE_data",
     "npz_dir": "datagen",
     "model_dir": "CARE_models",
     "accuracy_dir": "accuracy",
