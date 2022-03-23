@@ -1,14 +1,14 @@
-import os
-import json
 import argparse
+import json
+import os
 from itertools import product
+
 from am_utils.utils import walk_dir
 from care_batch.care_prep import care_prep
 from care_batch.datagen import datagen
 from care_batch.evaluate import evaluate, summarize_stats
 from care_batch.restore import restore
 from care_batch.train import train
-
 from cosmos.api import (
     Cosmos,
     py_call,
@@ -68,7 +68,7 @@ def get_train_tasks(workflow, datagen_tasks, params):
 
 def get_restore_tasks(workflow, train_tasks, params):
     restore_tasks = []
-    input_dir = os.path.abspath(os.path.join(params.output_dir, params.data_dir, 
+    input_dir = os.path.abspath(os.path.join(params.output_dir, params.data_dir,
                                              params.name_validation, params.name_low))
     for train_task in train_tasks:
         model_name = train_task.params['model_name']
@@ -90,10 +90,9 @@ def get_restore_tasks(workflow, train_tasks, params):
 
 
 def get_evaluation_tasks(workflow, restore_tasks, params):
-
     evaluation_tasks = []
     ids = []
-    
+
     for restore_task in restore_tasks:
         input_dir = restore_task.params['output_dir']
         uid = input_dir.split('/')[-1]
@@ -108,9 +107,8 @@ def get_evaluation_tasks(workflow, restore_tasks, params):
             parents=[restore_task]
         )
         evaluation_tasks.append(task)
-        
-    
-    base_dir = os.path.abspath(os.path.join(params.output_dir, params.data_dir, 
+
+    base_dir = os.path.abspath(os.path.join(params.output_dir, params.data_dir,
                                             params.name_validation))
     for inpdir in os.listdir(base_dir):
         if not inpdir in ids:
@@ -125,7 +123,6 @@ def get_evaluation_tasks(workflow, restore_tasks, params):
                 uid=inpdir
             )
             evaluation_tasks.append(task)
-
 
     return evaluation_tasks
 
@@ -150,7 +147,6 @@ def recipe(workflow, params):
 
 
 def main():
-
     p = argparse.ArgumentParser()
     p.add_argument("-drm", default="local", help="", choices=("local", "awsbatch", "slurm", "drmaa:ge", "ge"))
     p.add_argument("-q", "--queue", help="Submit to this queue if the DRM supports it")
@@ -162,7 +158,7 @@ def main():
     with open(args.parameter_file) as f:
         params = json.load(f)
     params = argparse.Namespace(**params)
-    
+
     __copy_data(params.input_dir,
                 os.path.join(params.output_dir, params.data_dir))
 
@@ -175,7 +171,8 @@ def main():
     workflow.make_output_dirs()
     os.makedirs(params.output_dir, exist_ok=True)
     workflow.run(max_cores=args.n_cores, cmd_wrapper=py_call, max_gpus=args.n_gpus)
-    
+
+
 if __name__ == "__main__":
     with environment_variables(COSMOS_LOCAL_GPU_DEVICES="0,1"):
         main()
