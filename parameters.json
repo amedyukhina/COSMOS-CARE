@@ -1,29 +1,21 @@
 {
     "parameter_fn": "/research/sharedresources/cbi/common/Anna/codes/COSMOS-CARE/parameters.json",
-    "db_filename": "path/to/database/cosmos2.sqlite",
+    "db_filename": "path/to/database/cosmos.sqlite",
     "workflow_name": "CARE_test",
-    "base_dir": "path/to/the/directory/with/data",
-    "input_dir": "input_data",
-    "data_dir": "CARE_data",
+    "input_dir": "path/to/the/directory/with/data",
+    "output_dir": "path/to/the/directory/to/save/results/CARE_test",
+    "npz_dir": "datagen",
     "model_dir": "CARE_models",
     "accuracy_dir": "accuracy",
     "accuracy_fn": "accuracy.csv",
     "n_jobs": 30,
-    "name_high": "high",
-    "name_low": "low",
+    "name_high": "high_deconvolved",
+    "name_low": "low_raw",
     "name_train": "train",
     "name_validation": "validation",
     "name_test": "test",
     "axes": "ZYX",
     "save_training_history": false,
-    "input_pairs": [
-        [
-            "high_power/deconvolved",
-            "low_power/raw"
-        ]
-    ],
-    "test_fraction": 0.2,
-    "validation_fraction": 0.2,
     "patch_size": [
         [
             16,

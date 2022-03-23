@@ -2,6 +2,7 @@ import os
 import json
 import argparse
 from itertools import product
+from am_utils.utils import walk_dir
 from care_batch.care_prep import care_prep
 from care_batch.datagen import datagen
 from care_batch.evaluate import evaluate, summarize_stats
@@ -15,50 +16,38 @@ from cosmos.api import (
 from cosmos.util.helpers import environment_variables
 
 
-def set_care_prep_tasks(workflow, params):
-    care_prep_tasks = []
-    for input_pair in params.input_pairs:
-        uid = rf"{input_pair[0].replace('/', '_')}_vs_{input_pair[1].replace('/', '_')}"
-        task = workflow.add_task(
-            func=care_prep,
-            params=dict(input_pair=[os.path.join(params.base_dir, params.input_dir, fn)
-                                    for fn in input_pair],
-                        output_dir=os.path.join(params.base_dir, params.data_dir, uid),
-                        name_high=params.name_high,
-                        name_low=params.name_low,
-                        name_train=params.name_train,
-                        name_validation=params.name_validation,
-                        name_test=params.name_test,
-                        validation_fraction=params.validation_fraction,
-                        test_fraction=params.test_fraction),
-            uid=uid)
-        care_prep_tasks.append(task)
-    return care_prep_tasks
+def __copy_data(input_dir, output_dir):
+    for fn in walk_dir(input_dir):
+        fn_out = fn.replace(input_dir, output_dir)
+        if not os.path.exists(fn_out):
+            os.makedirs(os.path.dirname(fn_out), exist_ok=True)
+            os.symlink(fn, fn_out)
+
+            
+def __get_subfolder(path):
+    return path.rstrip('/').split('/')[-1]
 
 
-def set_datagen_tasks(workflow, care_prep_tasks, params):
+def set_datagen_tasks(workflow, params):
+    __copy_data(params.input_dir,
+                os.path.join(params.output_dir, __get_subfolder(params.input_dir)))
     datagen_tasks = []
-    for care_prep_task in care_prep_tasks:
-        pair_dir = care_prep_task.params['output_dir']
-        for ps, n_patches in product(params.patch_size, params.n_patches_per_image):
-            uid = rf"{pair_dir.split('/')[-1]}_patch_size={ps}_npatches={n_patches}"
-            if params.validation_fraction > 0 or params.test_fraction > 0:
-                basepath = os.path.join(pair_dir, params.name_train)
-            else:
-                basepath = pair_dir
-            task = workflow.add_task(
-                func=datagen,
-                params=dict(basepath=basepath,
-                            save_file=os.path.join(params.base_dir, params.data_dir, rf"{uid}.npz"),
-                            target_dir=params.name_high,
-                            source_dir=params.name_low,
-                            axes=params.axes,
-                            patch_size=ps,
-                            n_patches_per_image=n_patches),
-                parents=[care_prep_task],
-                uid=uid
-            )
-            datagen_tasks.append(task)
+    for ps, n_patches in product(params.patch_size, params.n_patches_per_image):
+        uid = rf"patch_size={ps}_npatches={n_patches}"
+        basepath = os.path.abspath(os.path.join(params.output_dir,
+                                                __get_subfolder(params.input_dir), params.name_train))
+        task = workflow.add_task(
+            func=datagen,
+            params=dict(basepath=basepath,
+                        save_file=os.path.join(params.output_dir, params.npz_dir, rf"{uid}.npz"),
+                        target_dir=params.name_high,
+                        source_dir=params.name_low,
+                        axes=params.axes,
+                        patch_size=ps,
+                        n_patches_per_image=n_patches),
+            uid=uid
+        )
+        datagen_tasks.append(task)
     return datagen_tasks
 
 
@@ -71,10 +60,9 @@ def get_train_tasks(workflow, datagen_tasks, params):
             task = workflow.add_task(
                 func=train,
                 params=dict(data_file=data_file,
-                            model_basedir=os.path.join(params.base_dir, params.model_dir),
+                            model_basedir=os.path.join(params.output_dir, params.model_dir),
                             train_steps_per_epoch=st,
                             train_batch_size=bs,
-                            save_history=params.save_training_history,
                             model_name=uid),
                 parents=[datagen_task],
                 uid=uid,
@@ -84,80 +72,66 @@ def get_train_tasks(workflow, datagen_tasks, params):
     return train_tasks
 
 
-def get_restore_tasks(workflow, care_prep_tasks, train_tasks, params):
+def get_restore_tasks(workflow, train_tasks, params):
     restore_tasks = []
-    for care_prep_task in care_prep_tasks:
-        for train_task in train_tasks:
-            input_dir = care_prep_task.params['output_dir']
-            model_name = train_task.params['model_name']
-            uid = rf"{input_dir.split('/')[-1]}_{model_name}"
-            if params.validation_fraction > 0 or params.test_fraction > 0:
-                if params.validation_fraction > 0:
-                    input_dir = os.path.join(input_dir, params.name_validation)
-                else:
-                    input_dir = os.path.join(input_dir, params.name_train)
-            output_dir = os.path.join(input_dir, rf"{params.name_low}_restored_{model_name}")
-            task = workflow.add_task(
-                func=restore,
-                params=dict(input_dir=os.path.join(input_dir, params.name_low),
-                            output_dir=output_dir,
-                            model_basedir=train_task.params['model_basedir'],
-                            model_name=model_name,
-                            axes=params.axes),
-                parents=[care_prep_task, train_task],
-                uid=uid,
-                gpu_req=1
-            )
-            restore_tasks.append(task)
+    input_dir = os.path.abspath(os.path.join(params.output_dir, __get_subfolder(params.input_dir), 
+                                             params.name_validation, params.name_low))
+    for train_task in train_tasks:
+        model_name = train_task.params['model_name']
+        uid = rf"restored_{model_name}"
+        output_dir = input_dir + rf"_{uid}"
+        task = workflow.add_task(
+            func=restore,
+            params=dict(input_dir=input_dir,
+                        output_dir=output_dir,
+                        model_basedir=train_task.params['model_basedir'],
+                        model_name=model_name,
+                        axes=params.axes),
+            parents=[train_task],
+            uid=uid,
+            gpu_req=1
+        )
+        restore_tasks.append(task)
     return restore_tasks
 
 
-def get_evaluation_tasks(workflow, restore_tasks, care_prep_tasks, params):
+def get_evaluation_tasks(workflow, restore_tasks, params):
 
     evaluation_tasks = []
-
-    for care_prep_task in care_prep_tasks:
-        for inpdir in [params.name_high, params.name_low]:
-            input_dir = care_prep_task.params['output_dir']
-            uid = input_dir.split('/')[-1] + '_' + inpdir
-
-            if params.validation_fraction > 0 or params.test_fraction > 0:
-                if params.validation_fraction > 0:
-                    input_dir = os.path.join(input_dir, params.name_validation)
-                else:
-                    input_dir = os.path.join(input_dir, params.name_train)
-
-            input_dir = os.path.join(input_dir, inpdir)
-            task = workflow.add_task(
-                func=evaluate,
-                params=dict(input_dir=input_dir,
-                            gt_dir=os.path.join(input_dir, rf'../{params.name_high}'),
-                            output_fn=os.path.join(params.base_dir, params.accuracy_dir, uid + '.csv'),
-                            model_name=inpdir,
-                            pair_name=input_dir.split('/')[-2]),
-                uid=uid,
-                parents=[care_prep_task]
-            )
-            evaluation_tasks.append(task)
-
+    ids = []
+    
     for restore_task in restore_tasks:
         input_dir = restore_task.params['output_dir']
-        if params.validation_fraction > 0 or params.test_fraction > 0:
-            pair_name = input_dir.split('/')[-3]
-        else:
-            pair_name = input_dir.split('/')[-2]
-        uid = pair_name + '_' + input_dir.split('/')[-1]
+        uid = input_dir.split('/')[-1]
+        ids.append(uid)
         task = workflow.add_task(
             func=evaluate,
             params=dict(input_dir=input_dir,
                         gt_dir=os.path.join(input_dir, rf'../{params.name_high}'),
-                        output_fn=os.path.join(params.base_dir, params.accuracy_dir, uid + '.csv'),
-                        model_name=restore_task.params['model_name'],
-                        pair_name=pair_name),
+                        output_fn=os.path.join(params.output_dir, params.accuracy_dir, uid + '.csv'),
+                        model_name=restore_task.params['model_name']),
             uid=uid,
             parents=[restore_task]
         )
         evaluation_tasks.append(task)
+        
+    
+    base_dir = os.path.abspath(os.path.join(params.output_dir, __get_subfolder(params.input_dir), 
+                                            params.name_validation))
+    for inpdir in os.listdir(base_dir):
+        if not inpdir in ids:
+            input_dir = os.path.join(base_dir, inpdir)
+
+            task = workflow.add_task(
+                func=evaluate,
+                params=dict(input_dir=input_dir,
+                            gt_dir=os.path.join(input_dir, rf'../{params.name_high}'),
+                            output_fn=os.path.join(params.output_dir, params.accuracy_dir, inpdir + '.csv'),
+                            model_name=inpdir),
+                uid=inpdir
+            )
+            evaluation_tasks.append(task)
+
 
     return evaluation_tasks
 
@@ -166,7 +140,7 @@ def get_summarize_task(workflow, evaluation_tasks, params):
     summarize_task = workflow.add_task(
         func=summarize_stats,
         params=dict(input_fns=[t.params['output_fn'] for t in evaluation_tasks],
-                    output_fn=os.path.join(params.base_dir, params.accuracy_fn)),
+                    output_fn=os.path.join(params.output_dir, params.accuracy_fn)),
         parents=evaluation_tasks,
         uid="",
     )
@@ -174,11 +148,10 @@ def get_summarize_task(workflow, evaluation_tasks, params):
 
 
 def recipe(workflow, params):
-    care_prep_tasks = set_care_prep_tasks(workflow, params)
-    datagen_tasks = set_datagen_tasks(workflow, care_prep_tasks, params)
+    datagen_tasks = set_datagen_tasks(workflow, params)
     train_tasks = get_train_tasks(workflow, datagen_tasks, params)
-    restore_tasks = get_restore_tasks(workflow, care_prep_tasks, train_tasks, params)
-    evaluation_tasks = get_evaluation_tasks(workflow, restore_tasks, care_prep_tasks, params)
+    restore_tasks = get_restore_tasks(workflow, train_tasks, params)
+    evaluation_tasks = get_evaluation_tasks(workflow, restore_tasks, params)
     get_summarize_task(workflow, evaluation_tasks, params)
 
 
@@ -188,8 +161,6 @@ def main():
     p.add_argument("-drm", default="local", help="", choices=("local", "awsbatch", "slurm", "drmaa:ge", "ge"))
     p.add_argument("-q", "--queue", help="Submit to this queue if the DRM supports it")
     p.add_argument("-p", "--parameter-file", help="Parameter file name")
-    p.add_argument("-g", "--n-gpus", type=int, default=2, help="Number of GPUs to use")
-    p.add_argument("-c", "--n-cores", type=int, default=30, help="Number of CPU cores to use")
 
     args = p.parse_args()
     with open(args.parameter_file) as f:
@@ -203,8 +174,7 @@ def main():
     recipe(workflow, params)
 
     workflow.make_output_dirs()
-    os.makedirs(params.base_dir, exist_ok=True)
-    workflow.run(max_cores=args.n_cores, cmd_wrapper=py_call, max_gpus=args.n_gpus)
+    workflow.run(max_cores=params.n_jobs, cmd_wrapper=py_call, max_gpus=2)
 
     
 if __name__ == "__main__":
