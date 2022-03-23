@@ -29,8 +29,6 @@ def __get_subfolder(path):
 
 
 def set_datagen_tasks(workflow, params):
-    __copy_data(params.input_dir,
-                os.path.join(params.output_dir, __get_subfolder(params.input_dir)))
     datagen_tasks = []
     for ps, n_patches in product(params.patch_size, params.n_patches_per_image):
         uid = rf"patch_size={ps}_npatches={n_patches}"
@@ -169,6 +167,9 @@ def main():
     with open(args.parameter_file) as f:
         params = json.load(f)
     params = argparse.Namespace(**params)
+    
+    __copy_data(params.input_dir,
+                os.path.join(params.output_dir, __get_subfolder(params.input_dir)))
 
     cosmos = Cosmos(params.db_filename, default_drm=args.drm, default_max_attempts=2, default_queue=args.queue)
     cosmos.initdb()
