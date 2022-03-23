@@ -63,6 +63,7 @@ def get_train_tasks(workflow, datagen_tasks, params):
                             model_basedir=os.path.join(params.output_dir, params.model_dir),
                             train_steps_per_epoch=st,
                             train_batch_size=bs,
+                            save_history=params.save_training_history,
                             model_name=uid),
                 parents=[datagen_task],
                 uid=uid,
@@ -161,6 +162,8 @@ def main():
     p.add_argument("-drm", default="local", help="", choices=("local", "awsbatch", "slurm", "drmaa:ge", "ge"))
     p.add_argument("-q", "--queue", help="Submit to this queue if the DRM supports it")
     p.add_argument("-p", "--parameter-file", help="Parameter file name")
+    p.add_argument("-g", "--n-gpus", type=int, default=2, help="Number of GPUs to use")
+    p.add_argument("-c", "--n-cores", type=int, default=30, help="Number of CPU cores to use")
 
     args = p.parse_args()
     with open(args.parameter_file) as f:
@@ -174,8 +177,8 @@ def main():
     recipe(workflow, params)
 
     workflow.make_output_dirs()
-    workflow.run(max_cores=params.n_jobs, cmd_wrapper=py_call, max_gpus=2)
-
+    os.makedirs(params.base_dir, exist_ok=True)
+    workflow.run(max_cores=args.n_cores, cmd_wrapper=py_call, max_gpus=args.n_gpus)
     
 if __name__ == "__main__":
     with environment_variables(COSMOS_LOCAL_GPU_DEVICES="0,1"):
