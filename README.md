@@ -8,3 +8,12 @@ This is a [COSMOS](https://github.com/Mizzou-CBMI/COSMOS2) recipe to run [CARE](
 2. Install the [COSMOS2](https://github.com/Mizzou-CBMI/COSMOS2) package
 3. Run the [set_parameters.ipynb](set_parameters.ipynb) notebook to setup the parameters of the workflow
 4. Run `python cosmos_workflow.py -p parameters.json` with the generated parameter file
+
+### Installation of COSMOS2 on RHEL
+
+```
+pip install cosmos-wfm
+sudo yum install graphviz
+conda install --channel conda-forge pygraphviz
+pip install sqlalchemy==1.3
+```
